@@ -24,7 +24,6 @@ const userSchema = new mongoose.Schema({
   photo: String,
   confirmPassword: {
     type: String,
-    required: true,
     validate: [
       function (val) {
         return this.password === val;
@@ -35,6 +34,12 @@ const userSchema = new mongoose.Schema({
   passwordChangedAt: {
     type: Date,
   },
+  active: {
+    type: Boolean,
+    required: true,
+    default: true,
+    select: false,
+  },
   roles: {
     type: String,
     enum: ['user', 'admin', 'guide', 'lead-guide'],
@@ -44,6 +49,10 @@ const userSchema = new mongoose.Schema({
   passwordResetExpires: Date,
 });
 
+userSchema.pre(/^find/, function (next) {
+  this.find({ active: true });
+  next();
+});
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
 
@@ -52,13 +61,20 @@ userSchema.pre('save', async function (next) {
 
   next();
 });
+
+userSchema.pre('save', function (next) {
+  if (!this.isModified(this.password) || this.isNew) return next();
+
+  if (this.passwordChangedAt) this.passwordChangedAt = Date.now() - 1000;
+  next();
+});
 userSchema.methods.correctPassword = function (currentPassword, userPassword) {
   return bcrypt.compare(currentPassword, userPassword);
 };
 
 userSchema.methods.isPasswordChanged = function (JwtTimeStamp) {
   if (this.passwordChangedAt) {
-    return parseInt(this.passwordChangedAt.getTime(), 10) > JwtTimeStamp;
+    return parseInt(this.passwordChangedAt.getTime() / 1000, 10) > JwtTimeStamp;
   }
   return false;
 };
@@ -69,12 +85,6 @@ userSchema.methods.createPasswordResetToken = function () {
   return resetToken;
 };
 
-userSchema.methods.resetPassword = async function (newPassword, confirmNewPassword) {
-  this.password = newPassword;
-  this.confirmPassword = confirmNewPassword;
-
-  await this.save();
-};
 const user = mongoose.model('tourUser', userSchema);
 
 module.exports = user;
