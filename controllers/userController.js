@@ -1,11 +1,16 @@
 /* eslint-disable prettier/prettier */
-exports.getUsers = (req, res) => {
-  // eslint-disable-next-line prettier/prettier
-  res.status(500).json({
-    status: 'error',
-    message: 'This route is not yet defined',
+const user = require('../models/userModels');
+const catchAsync = require('../utils/catchAsync');
+const appError = require('../utils/appError');
+
+exports.getUsers = catchAsync(async (req, res, next) => {
+  if (req.user.roles !== 'admin') next(new appError('Bad auth - only admin can get all users', 401));
+  const allUser = await user.find();
+  res.status(200).json({
+    status: 'success',
+    allUser,
   });
-};
+});
 
 exports.getUser = (req, res) => {
   res.status(500).json({

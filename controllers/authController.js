@@ -1,18 +1,28 @@
+/* eslint-disable no-unused-expressions */
 /* eslint-disable prettier/prettier */
 const { promisify } = require('util');
 const user = require('../models/userModels');
 const catchAsync = require('../utils/catchAsync');
 const jwt = require('jsonwebtoken');
 const appError = require('../utils/appError');
+const { sendEmail } = require('../utils/email');
+const crypto = require('crypto');
+const { features } = require('process');
 
 const signToken = (userId) => {
   const token = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
   return token;
 };
 
+const createSendToken = (user, statusCode, res) => {
+  const token = signToken(user._id);
+  res.status(statusCode).json({
+    status: 'success',
+    token: token,
+    User: user,
+  });
+};
 exports.signUp = catchAsync(async (req, res, next) => {
-  //   const newUser = await user.create(req.body);
-  //using this everyone can specify a role: admin into our application which is a security threat
   const newUser = await user.create({
     name: req.body.name,
     email: req.body.email,
@@ -21,14 +31,8 @@ exports.signUp = catchAsync(async (req, res, next) => {
     confirmPassword: req.body.confirmPassword,
     passwordChangedAt: req.body.passwordChangedAt,
   });
-
-  const token = signToken(newUser._id);
-  //jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
-  res.status(200).json({
-    status: 'success',
-    token: token,
-    User: newUser,
-  });
+  createSendToken(newUser, 201, res);
+  next();
 });
 
 exports.login = catchAsync(async (req, res, next) => {
@@ -39,11 +43,7 @@ exports.login = catchAsync(async (req, res, next) => {
   if (!loggedUser || !(await loggedUser.correctPassword(password, loggedUser.password))) {
     return next(new appError('Invalid email or password', 401));
   }
-  const token = signToken(loggedUser._id);
-  res.status(200).json({
-    status: 'success',
-    token: token,
-  });
+  createSendToken(loggedUser, 200, res);
 });
 
 exports.protect = catchAsync(async (req, res, next) => {
@@ -76,3 +76,93 @@ exports.restrictTo =
     }
     next();
   };
+
+exports.forgotPassword = catchAsync(async (req, res, next) => {
+  const { email } = req.body;
+  const userFound = await user.findOne({ email });
+
+  if (!userFound) return next(new appError('No User for the Email Found'));
+
+  const userToken = userFound.createPasswordResetToken();
+  await userFound.save({ validateBeforeSave: false });
+  const resetURL = `${req.protocol}://${req.get('host')}/api/v1/users/resetPassword/${userToken}`;
+  const message = `Forgot your password? Submit a PATCH request with your new password and confirmPassword to: ${resetURL}.\nIf you didn't forget your password, please ignore this email!`;
+
+  try {
+    await sendEmail({
+      email: userFound.email,
+      subject: 'Your password reset token (valid for 10mins)',
+      message,
+    });
+    res.status(200).json({
+      status: 'success',
+      message: 'Token sent to email!',
+    });
+  } catch (err) {
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save({ validateBeforeSave: false });
+    return next(new appError('There was an error sending the email. Try again later!'), 500);
+  }
+});
+
+exports.resetPassword = catchAsync(async (req, res, next) => {
+  const hashedToken = crypto.createHash('sha256').update(req.query.token).digest('hex');
+  const userFound = await user.findOne({ passwordResetToken: hashedToken, passwordResetExpires: { $gt: Date.now() } });
+
+  if (!userFound) {
+    return next(new appError('Token is invalid or has expired', 400));
+  }
+
+  const { password, confirmPassword } = req.body;
+  userFound.password = password;
+  userFound.confirmPassword = confirmPassword;
+
+  userFound.passwordResetToken = undefined;
+  userFound.passwordResetExpires = undefined;
+
+  await userFound.save();
+  createSendToken(userFound, 201, res);
+});
+
+exports.updatePassword = catchAsync(async (req, res, next) => {
+  const isUser = await user.findById(req.user.id).select('+password');
+  if (!isUser.correctPassword(req.body.password, isUser.password))
+    return next(new appError('your current Password is wrong'), 401);
+
+  isUser.password = req.body.password;
+  isUser.confirmPassword = req.body.confirmPassword;
+
+  await isUser.save();
+  createSendToken(isUser, 201, res);
+});
+const filterObject = (obj, ...allowedFields) => {
+  const newObj = {};
+  Object.keys(obj).forEach((el) => {
+    allowedFields.includes[el];
+    newObj[el] = obj[el];
+  });
+  return newObj;
+};
+exports.updateData = catchAsync(async (req, res, next) => {
+  if (req.body.password || req.user.confirmPassword)
+    return next(new appError('Error you cannot change your password with this route', 401));
+
+  const filteredBody = filterObject(req.body, 'name', 'email');
+  const updatedUser = await user.findByIdAndUpdate(req.user.id, filteredBody, { new: true, runValidators: true });
+  await updatedUser.save();
+
+  res.status(200).json({
+    status: 'successful',
+    updatedUser,
+  });
+});
+
+exports.deleteUser = catchAsync(async (req, res, next) => {
+  const updated = await user.findByIdAndUpdate(req.user.id, { active: false });
+
+  res.status(204).json({
+    status: 'Inactive',
+    updated,
+  });
+});
