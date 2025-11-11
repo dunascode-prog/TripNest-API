@@ -2,6 +2,7 @@
 const user = require('../models/userModels');
 const catchAsync = require('../utils/catchAsync');
 const appError = require('../utils/appError');
+const handlerFactory = require('./handlerFactory');
 
 exports.getUsers = catchAsync(async (req, res, next) => {
   if (req.user.roles !== 'admin') next(new appError('Bad auth - only admin can get all users', 401));
@@ -30,9 +31,4 @@ exports.postUser = (req, res) => {
     message: 'This route is not yet defined',
   });
 };
-exports.deleteUser = (req, res) => {
-  res.status(500).json({
-    status: 'error',
-    message: 'This route is not yet defined',
-  });
-};
+exports.deleteUser = handlerFactory.deleteOne(user);

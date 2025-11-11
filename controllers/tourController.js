@@ -9,6 +9,7 @@ const Tour = require('../models/tourmodels');
 const API_FEATURES = require('../utils/API_FEATURES');
 const catchAsync = require('../utils/catchAsync');
 const appError = require('../utils/appError');
+const handlerFactory = require('./handlerFactory');
 //const tours = JSON.parse(fs.readFileSync(`./dev-data/data/tours-simple.json`));
 
 // exports.check_id = (req, res, next, val) => {
@@ -118,7 +119,7 @@ exports.getTours = catchAsync(async (req, res, next) => {
   });
 });
 exports.getTour = catchAsync(async (req, res, next) => {
-  const tour = await Tour.findById(req.params.id);
+  const tour = await Tour.findById(req.params.id).populate('reviews');
 
   if (!tour) {
     return next(new appError('No Tour Available with that ID', 404));
@@ -159,16 +160,7 @@ exports.updateTour = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.deleteTour = catchAsync(async (req, res, next) => {
-  const tour = await Tour.findByIdAndDelete(req.params.id); //Its a restful not to send a response to the usse when a delete operation
-  if (!tour) {
-    return next(new appError('No Tour Available with that ID', 404));
-  }
-  res.status(204).json({
-    status: 'done',
-    data: null,
-  });
-});
+exports.deleteTour = handlerFactory.deleteOne(Tour);
 
 exports.getTourStats = catchAsync(async (req, res, next) => {
   const stats = await Tour.aggregate([

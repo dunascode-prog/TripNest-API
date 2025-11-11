@@ -41,15 +41,23 @@ class API_FEATURES {
   }
   sort() {
     if (this.queryStr.sort) {
-      const sortBy = this.queryStr.sort.split(',').join(' ');
-      const sortedtour = this.query.sort(sortBy);
-      this.query = sortedtour;
+      let sortBy;
+
+      if (Array.isArray(this.queryStr.sort)) {
+        // If it's an array, join into a single string first
+        sortBy = this.queryStr.sort.join(',').split(',').join(' ');
+      } else {
+        // If it's a plain string
+        sortBy = this.queryStr.sort.split(',').join(' ');
+      }
+
+      this.query = this.query.sort(sortBy);
     } else {
       this.query = this.query.sort('-createdAt');
     }
-
     return this;
   }
+
   limitFields() {
     if (this.queryStr.fields) {
       const selectedFields = this.queryStr.fields.split(',').join(' ');

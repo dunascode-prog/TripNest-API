@@ -14,12 +14,19 @@ const signToken = (userId) => {
   return token;
 };
 
-const createSendToken = (user, statusCode, res) => {
-  const token = signToken(user._id);
+const createSendToken = (userForController, statusCode, res) => {
+  const token = signToken(userForController._id);
+  const cookieOptions = {
+    expires: new Date(new Date().getTime() + process.env.COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000),
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+  };
+  userForController.password = undefined;
+  res.cookie('jwt', token, cookieOptions);
   res.status(statusCode).json({
     status: 'success',
     token: token,
-    User: user,
+    User: userForController,
   });
 };
 exports.signUp = catchAsync(async (req, res, next) => {

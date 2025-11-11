@@ -1,20 +1,34 @@
 /* eslint-disable new-cap */
+/* eslint-disable import/newline-after-import */
 /* eslint-disable prettier/prettier */
-// eslint-disable-next-line import/newline-after-import
 const express = require('express');
 const app = express();
 const morgan = require('morgan');
+const helmet = require('helmet');
+const rateLimiter = require('express-rate-limit');
+const hpp = require('hpp');
+const xss = require('./utils/xss');
 const appError = require('./utils/appError');
-
 const tourRouter = require('./routes/tourRoute');
 const userRouter = require('./routes/userRoute');
 const globalErrorHandler = require('./controllers/errorController');
+const customHpp = require('./utils/customHpp');
+const reviewRouter = require('./routes/reviewRoute');
+
+const limiter = rateLimiter({
+  max: 100,
+  windowMs: 60 * 60 * 1000,
+  message: 'too many messages login again in an hour',
+});
 
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-app.use(express.json());
+app.use(customHpp({ whitelist: ['duration', 'price', 'sort'] }));
+app.use(helmet());
+app.use(xss);
+app.use(express.json({ limit: '10kb' }));
 app.use(express.static(`${__dirname}/public`));
 
 //you can research middlewares from morgans website or express website
@@ -23,8 +37,10 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use('/api', limiter);
 app.use('/api/v1/tours', tourRouter);
 app.use('/api/v1/users', userRouter);
+app.use('/api/v1/reviews', reviewRouter);
 
 app.all(/^(?!\/api\/v1\/(?:tours|users)$).*/, (req, res, next) => {
   next(new appError(`this ${req.originalUrl} route doesn't exist`, 404));

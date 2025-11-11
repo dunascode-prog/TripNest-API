@@ -12,9 +12,14 @@ router.post('/forgotPassword', authController.forgotPassword);
 router.patch('/resetPassword', authController.resetPassword);
 router.patch('/updatePassword', authController.protect, authController.updatePassword);
 router.patch('/updateData', authController.protect, authController.updateData);
-router.delete('/deleteUser', authController.protect, authController.deleteUser);
-
 router.route('/').get(authController.protect, userController.getUsers);
-router.route('/:id').get(userController.getUser).post(userController.postUser).delete(userController.deleteUser);
+router
+  .route('/deleteUser')
+  .delete(authController.protect, authController.restrictTo('user', 'admin'), authController.deleteUser);
+router
+  .route('/:id')
+  .get(authController.protect, authController.restrictTo('user', 'admin'), userController.getUser)
+  .post(authController.protect, userController.postUser)
+  .delete(authController.protect, authController.restrictTo('admin'), userController.deleteUser);
 
 module.exports = router;

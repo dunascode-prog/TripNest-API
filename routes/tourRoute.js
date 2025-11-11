@@ -5,7 +5,7 @@ const express = require('express');
 const router = express.Router();
 const tourController = require('../controllers/tourController');
 const authController = require('../controllers/authController');
-
+const reviewRouter = require('./reviewRoute');
 //router.param('id', tourController.check_id); //use to define parameter middlewarenpm
 router.route('/getMonthlyStats/:year').get(tourController.getMonthlyPlan);
 router.route('/getTourStats').get(tourController.getTourStats);
@@ -16,4 +16,7 @@ router
   .get(tourController.getTour)
   .patch(tourController.updateTour)
   .delete(authController.protect, authController.restrictTo('admin', 'leadGuide'), tourController.deleteTour);
+
+router.use('/:tourId/reviews', reviewRouter);
+
 module.exports = router;
